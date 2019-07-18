@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from conans import ConanFile, tools, AutoToolsBuildEnvironment, MSBuild
+from conans import ConanFile, tools, AutoToolsBuildEnvironment, CMake
 import os
 
 
@@ -14,6 +14,7 @@ class YASMInstallerConan(ConanFile):
     exports_sources = ["LICENSE"]
     settings = "os_build", "arch_build", "compiler"
     _source_subfolder = "sources"
+    generators = "cmake"
 
     def source(self):
         source_url = "http://www.tortall.net/projects/yasm/releases/yasm-%s.tar.gz" % self.version
@@ -25,20 +26,14 @@ class YASMInstallerConan(ConanFile):
 
     def build(self):
         if self.settings.os_build == 'Windows':
-            self._build_vs()
+            self._build_cmake()
         else:
             self._build_configure()
 
-    def _build_vs(self):
-        with tools.chdir(os.path.join(self._source_subfolder, 'Mkfiles', 'vc10')):
-            with tools.vcvars(self.settings, arch=str(self.settings.arch_build), force=True):
-                msbuild = MSBuild(self)
-                if self.settings.arch_build == "x86":
-                    msbuild.build_env.link_flags.append('/MACHINE:X86')
-                elif self.settings.arch_build == "x86_64":
-                    msbuild.build_env.link_flags.append('/SAFESEH:NO /MACHINE:X64')
-                msbuild.build(project_file="yasm.sln", arch=self.settings.arch_build, build_type="Release",
-                              targets=["yasm"], platforms={"x86": "Win32"}, force_vcvars=True)
+    def _build_cmake(self):
+        cmake = CMake(self, build_type='Release')
+        cmake.configure(source_folder='sources')
+        cmake.build(args=['--config', 'Release'])
 
     def _build_configure(self):
         with tools.chdir(self._source_subfolder):
@@ -61,7 +56,8 @@ class YASMInstallerConan(ConanFile):
         self.copy(pattern="BSD.txt", dst="licenses", src=self._source_subfolder)
         self.copy(pattern="COPYING", dst="licenses", src=self._source_subfolder)
         if self.settings.os_build == 'Windows':
-            self.copy(pattern='*.exe', src=self._source_subfolder, dst='bin', keep_path=False)
+            self.copy(pattern='*.exe', src='Release', dst='bin', keep_path=False)
+            self.copy(pattern='*.dll', src='Release', dst='bin', keep_path=False)
 
     def package_info(self):
         self.env_info.PATH.append(os.path.join(self.package_folder, 'bin'))
